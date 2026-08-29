@@ -6,6 +6,16 @@ import (
 	"regexp"
 )
 
+var (
+	missingRequiredFieldErr = errors.New("required field had it's zero value")
+	stringTooShortErr       = errors.New("string too short")
+	intTooSmallErr          = errors.New("int too small")
+	stringTooLongErr        = errors.New("string was too long")
+	intTooLargeErr          = errors.New("int was too large")
+	patternForNonStringErr  = errors.New("patterns are only valid on string fields")
+	patternMismatchErr      = errors.New("failed to match string field against pattern")
+)
+
 // Struct validates the struct using the palidate tags to determine how fields should be populated.
 // v must be either a struct or a pointer to a struct, all validation failures are returned in an error.
 // A nil return means that validation passed.
@@ -36,7 +46,7 @@ func Struct(v any) error {
 		}
 
 		if tag.required && fieldValue.IsZero() {
-			b.addFieldErrs(f.Name, errors.New("required field had it's zero value"))
+			b.addFieldErrs(f.Name, missingRequiredFieldErr)
 		}
 
 		err := validateMin(fieldValue, tag.min)
@@ -69,11 +79,11 @@ func validateMin(v reflect.Value, min *int) error {
 	}
 
 	if v.Kind() == reflect.String && v.Len() < *min {
-		return errors.New("string was too short")
+		return stringTooShortErr
 	}
 
 	if v.CanInt() && int(v.Int()) < *min {
-		return errors.New("int was too small")
+		return intTooSmallErr
 	}
 
 	return nil
@@ -86,11 +96,11 @@ func validateMax(v reflect.Value, max *int) error {
 	}
 
 	if v.Kind() == reflect.String && v.Len() > *max {
-		return errors.New("string was too long")
+		return stringTooLongErr
 	}
 
 	if v.CanInt() && int(v.Int()) > *max {
-		return errors.New("int was too large")
+		return intTooLargeErr
 	}
 
 	return nil
@@ -103,11 +113,11 @@ func validatePattern(v reflect.Value, pat *regexp.Regexp) error {
 	}
 
 	if v.Kind() != reflect.String {
-		return errors.New("patterns are only valid on string fields")
+		return patternForNonStringErr
 	}
 
 	if !pat.MatchString(v.String()) {
-		return errors.New("failed to match string field against pattern")
+		return patternMismatchErr
 	}
 
 	return nil
