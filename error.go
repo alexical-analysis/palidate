@@ -48,10 +48,24 @@ func (e *ErrorBuilder) Error() error {
 
 	errMap := make(map[string]error, len(tmpMap))
 	for field, errs := range tmpMap {
-		errMap[field] = errors.Join(errs...)
+		errMap[field] = joinErros(errs)
 	}
 
 	return Error{errMap: errMap}
+}
+
+func joinErros(errs []error) error {
+	s := []string{}
+	for _, err := range errs {
+		if err != nil {
+			s = append(s, err.Error())
+		}
+	}
+	if len(s) == 0 {
+		return nil
+	}
+
+	return errors.New(strings.Join(s, ", "))
 }
 
 // Error contains all the errors for all the struct fields validated by palidate

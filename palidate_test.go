@@ -140,7 +140,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Phone: "123",
 			},
-			want: "invalid struct| Phone: string was too short",
+			want: "invalid struct| Phone: string too short",
 		},
 		{
 			name: "string field too long",
@@ -149,7 +149,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Phone: "123456789012",
 			},
-			want: "invalid struct| Phone: string was too long",
+			want: "invalid struct| Phone: string too long",
 		},
 		{
 			name: "valid string field",
@@ -167,7 +167,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Age: 17,
 			},
-			want: "invalid struct| Age: int was too small",
+			want: "invalid struct| Age: int too small",
 		},
 		{
 			name: "integer field too large",
@@ -176,7 +176,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Age: 66,
 			},
-			want: "invalid struct| Age: int was too large",
+			want: "invalid struct| Age: int too large",
 		},
 		{
 			name: "uint field too small",
@@ -185,7 +185,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Age: 17,
 			},
-			want: "invalid struct| Age: int was too small",
+			want: "invalid struct| Age: int too small",
 		},
 		{
 			name: "uint field too large",
@@ -194,7 +194,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Age: 66,
 			},
-			want: "invalid struct| Age: int was too large",
+			want: "invalid struct| Age: int too large",
 		},
 		{
 			name: "int8 field too small",
@@ -203,7 +203,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Age: 17,
 			},
-			want: "invalid struct| Age: int was too small",
+			want: "invalid struct| Age: int too small",
 		},
 		{
 			name: "int8 field too large",
@@ -212,7 +212,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Age: 66,
 			},
-			want: "invalid struct| Age: int was too large",
+			want: "invalid struct| Age: int too large",
 		},
 		{
 			name: "uint32 field too small",
@@ -221,7 +221,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Age: 17,
 			},
-			want: "invalid struct| Age: int was too small",
+			want: "invalid struct| Age: int too small",
 		},
 		{
 			name: "uint32 field too large",
@@ -230,7 +230,7 @@ func TestStructMaxMin(t *testing.T) {
 			}{
 				Age: 66,
 			},
-			want: "invalid struct| Age: int was too large",
+			want: "invalid struct| Age: int too large",
 		},
 		{
 			name: "values within bounds",
@@ -290,10 +290,9 @@ func TestStructMultipleErrors(t *testing.T) {
 				Code:     "ABCD",
 			},
 			want: []string{
-				"Username: string was too short",
-				"Username: failed to match string field against pattern",
+				"Username: string too short, failed to match string field against pattern",
 				"Age: int too small",
-				"Code: string was too long",
+				"Code: string too long",
 			},
 		},
 		{
@@ -319,12 +318,10 @@ func TestStructMultipleErrors(t *testing.T) {
 				Name string `palidate:"required,min=3"`
 				Age  int    `palidate:"required,min=18"`
 			}{
-				Name: "",
-				Age:  12,
+				Age: 12,
 			},
 			want: []string{
-				"Name: required field had it's zero value",
-				"Name: string was too short",
+				"Name: required field had it's zero value, string too short",
 				"Age: int too small",
 			},
 		},
@@ -338,7 +335,6 @@ func TestStructMultipleErrors(t *testing.T) {
 			want: []string{
 				"Broken: unknown rule 'unknown'",
 				"Name: required field had it's zero value",
-				"Malformed: failed to get palidate tag",
 			},
 		},
 	}

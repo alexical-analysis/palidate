@@ -6,13 +6,12 @@ import (
 
 var (
 	missingRequiredFieldErr = errors.New("required field had it's zero value")
-	stringTooShortErr       = errors.New("string was too short")
+	stringTooShortErr       = errors.New("string too short")
 	intTooSmallErr          = errors.New("int too small")
-	stringTooLongErr        = errors.New("string was too long")
-	intTooLargeErr          = errors.New("int was too large")
+	stringTooLongErr        = errors.New("string too long")
+	intTooLargeErr          = errors.New("int too large")
 	patternForNonStringErr  = errors.New("patterns are only valid on string fields")
 	patternMismatchErr      = errors.New("failed to match string field against pattern")
-	malformedTag            = errors.New("failed to get palidate tag")
 )
 
 // Struct validates the struct using the palidate tags to determine how fields should be populated.
