@@ -217,7 +217,7 @@ func TestStructMaxMin(t *testing.T) {
 		{
 			name: "uint32 field too small",
 			v: struct {
-				Age int32 `palidate:"min=18"`
+				Age uint32 `palidate:"min=18"`
 			}{
 				Age: 17,
 			},
@@ -226,7 +226,7 @@ func TestStructMaxMin(t *testing.T) {
 		{
 			name: "uint32 field too large",
 			v: struct {
-				Age int32 `palidate:"max=65"`
+				Age uint32 `palidate:"max=65"`
 			}{
 				Age: 66,
 			},
