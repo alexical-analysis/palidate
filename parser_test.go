@@ -10,7 +10,7 @@ func ptr[T any](v T) *T {
 	return &v
 }
 
-func TestParser_Parse(t *testing.T) {
+func TestParserParse(t *testing.T) {
 	tests := []struct {
 		name     string
 		rawTag   string
@@ -94,6 +94,107 @@ func TestParser_Parse(t *testing.T) {
 			want:     &Rule{required: true},
 			wantErrs: 0,
 		},
+		{
+			name:   "whitespace around comma",
+			rawTag: "required , min=1",
+			want: &Rule{
+				required: true,
+				min:      ptr(1),
+			},
+			wantErrs: 0,
+		},
+		{
+			name:     "trailing comma",
+			rawTag:   "required,",
+			want:     &Rule{required: true},
+			wantErrs: 0,
+		},
+		{
+			name:     "duplicate required",
+			rawTag:   "required,required",
+			want:     &Rule{required: true},
+			wantErrs: 0,
+		},
+		{
+			name:     "unknown rule",
+			rawTag:   "unknown",
+			wantErrs: 1,
+		},
+		{
+			name:     "unknown rule followed by valid rule",
+			rawTag:   "unknown,required",
+			wantErrs: 1,
+		},
+		{
+			name:     "missing comma",
+			rawTag:   "required min=1",
+			wantErrs: 1,
+		},
+		{
+			name:     "missing maximum",
+			rawTag:   "max=",
+			wantErrs: 1,
+		},
+		{
+			name:     "invalid maximum",
+			rawTag:   "max=abc",
+			wantErrs: 2,
+		},
+		{
+			name:     "missing minimum",
+			rawTag:   "min=",
+			wantErrs: 1,
+		},
+		{
+			name:     "invalid minimum",
+			rawTag:   "min=-",
+			wantErrs: 1,
+		},
+		{
+			name:     "integer overflow",
+			rawTag:   "max=999999999999999999999999",
+			wantErrs: 1,
+		},
+		{
+			name:     "missing regex",
+			rawTag:   "regex=",
+			wantErrs: 1,
+		},
+		{
+			name:     "regex not enclosed",
+			rawTag:   "regex=abc",
+			wantErrs: 2,
+		},
+		{
+			name:     "unterminated regex",
+			rawTag:   "regex='abc",
+			wantErrs: 1,
+		},
+		{
+			name:     "invalid regex",
+			rawTag:   "regex='['",
+			wantErrs: 1,
+		},
+		{
+			name:     "duplicate minimum",
+			rawTag:   "min=1,min=2",
+			wantErrs: 1,
+		},
+		{
+			name:     "duplicate maximum",
+			rawTag:   "max=1,max=2",
+			wantErrs: 1,
+		},
+		{
+			name:     "duplicate regex",
+			rawTag:   "regex='a',regex='b'",
+			wantErrs: 1,
+		},
+		{
+			name:     "leading comma",
+			rawTag:   ",required",
+			wantErrs: 1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -102,6 +203,9 @@ func TestParser_Parse(t *testing.T) {
 			got, errs := p.Parse(tt.rawTag)
 			if len(errs) != tt.wantErrs {
 				t.Fatalf("parseTag: got %d errors, but wanted %d: %v", len(errs), tt.wantErrs, errs)
+			}
+			if got == nil {
+				return
 			}
 
 			// unset the regex patterns since those can not be compared using reflect.DeepEqual.
