@@ -1,181 +1,225 @@
 package palidate
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
-// TODO: need a better name than parsedTag
-type parsedTag struct {
+// Rule is the structured representation of the validation rules set by the palidate struct tag
+type Rule struct {
 	required bool
 	min      *int
 	max      *int
 	pattern  *regexp.Regexp
 }
 
-// TODO: this probably needs to be a struct so it can hold some state. Right now too much of the logic
-// is just held inside the function
-func parseTag(rawTag string) parsedTag {
-	if rawTag == "" {
-		return parsedTag{}
-	}
+// Parser is a parser for palidate tags, not safe for concurent use. If needed, concurent parsing is
+// needed create a new parser per-thread.
+type Parser struct {
+	offset int
+	target []byte
+}
 
-	parsed := parsedTag{}
-	for offset := 0; offset < len(rawTag); {
-		frag := rawTag[offset:]
+// Parse a palidate struct tag into a Rule struct, all errors encountered durring parsing are returned
+// If no errors exist the slice will be nil so checking for nil is still valid.
+func (p *Parser) Parse(rawTag string) (*Rule, []error) {
+	// reset the parser before parsing since this same parser can be used for more than one tag
+	p.offset = 0
+	p.target = []byte(rawTag)
 
-		fieldName := ""
-		switch {
-		case frag[0] == ' ' || frag[0] == '\t':
-			// just skip whitespace
-			offset++
-			continue
-		case strings.HasPrefix(frag, "required"):
-			fieldName = "required"
-			parsed.required = true
-			offset += 8
-		case strings.HasPrefix(frag, "max"):
-			fieldName = "max"
+	// make sure we eat any leading whitespace before we try to start parsing
+	p.eatWhiteSpace()
 
-			if frag[3] != '=' {
-				// malformed field, panic so it's easy to track down
-				panic("invalid tag, missing '=' after 'max' field")
-			}
-
-			maxInt, count, err := parseInt(frag[4:])
-			if err != nil {
-				// malformed field, panic so it's easy to track down
-				panic("invalid tag, 'max' value must be a valid int")
-			}
-			offset += count + 4 // 4 for 'max' + '='
-			parsed.max = &maxInt
-
-		case strings.HasPrefix(frag, "min"):
-			fieldName = "min"
-
-			if frag[3] != '=' {
-				// malformed field, panic so it's easy to track down
-				panic("invalid tag, missing '=' after 'min' field")
-			}
-
-			minInt, count, err := parseInt(frag[4:])
-			if err != nil {
-				// malformed field, panic so it's easy to track down
-				panic("invalid tag, 'min' value must be a valid int")
-			}
-			offset += count + 4 // 4 for min and '='
-			parsed.min = &minInt
-
-		case strings.HasPrefix(frag, "regex"):
-			fieldName = "regex"
-			if frag[5] != '=' {
-				// malformed field, panic so it's easy to track down
-				panic("invalid tag, missing '=' after 'min' field")
-			}
-
-			if frag[6] != '\'' {
-				// malformed field, panic so it's easy to track down
-				panic("invalid tag, regex patterns must be contained inside single quotes")
-			}
-
-			regex, count, err := parsePattern(frag[7:])
-			if err != nil {
-				// malformed field, panic so it's easy to track down
-				pattern := frag[7 : count+7]
-				panic(fmt.Sprintf("invalid regex, failed to compile '%s' into a valid pattern", pattern))
-			}
-			offset += count + 7 // 7 for 'regex' + '=' + leading single quote
-			parsed.pattern = regex
-		default:
-			// malformed field, panic so it's easy to track down
-			panic(fmt.Sprintf("unknown field '%s'", frag))
+	rule := &Rule{}
+	var errs []error
+	for p.offset < len(p.target) {
+		err := p.parseRule(rule)
+		if err != nil {
+			errs = append(errs, err)
 		}
 
-		// TODO: this eats any trailing white space but I know there's a better way to do this
-		for {
-			if offset >= len(rawTag) {
-				break
-			}
-
-			if rawTag[offset] == ' ' || rawTag[offset] == '\t' {
-				offset++
-			} else {
-				break
-			}
-		}
-
-		if offset >= len(rawTag) {
+		// parse the trailing comma and any white space so we're ready to parse the next rule at the
+		// top of the loop
+		err = p.checkComma()
+		if err != nil {
+			errs = append(errs, err)
+			// this is a malformed tag at this point so we just need to bail
 			break
 		}
 
-		if rawTag[offset] != ',' {
-			panic(fmt.Sprintf("invalid tag, missing ',' after '%s' field", fieldName))
-		}
-		// skip the , so we can start parsing the next field
-		offset++
+		p.eatWhiteSpace()
 	}
 
-	return parsed
+	if errs != nil {
+		return nil, errs
+	}
+
+	return rule, nil
 }
 
-// parseInt parses an int from a tag fragment and returns that int and the number of characters that
-// were parsed to create it.
-func parseInt(frag string) (int, int, error) {
-	count := 0
-	for i, r := range frag {
-		count++
-		if r >= '0' && r <= '9' {
-			continue
+// eatWhiteSpace will progress the parser past any spaces or tabs. Tags can not contain new lines so
+// those are not considered
+func (p *Parser) eatWhiteSpace() {
+	for p.offset < len(p.target) {
+		r, i := utf8.DecodeRune(p.target[p.offset:])
+		if r != ' ' && r != '\t' {
+			break
 		}
 
-		// the first character can be negative
-		if i == 0 && r == '-' {
-			continue
-		}
+		p.offset += i
+	}
+}
 
-		// take one back since this rune was not actually a match
-		count--
-		break
+// checkComma checks if the parser is not at the end of the target, ensure there is a comma and progress
+// the parser. All whitespace before the comma will be skipped
+func (p *Parser) checkComma() error {
+	p.eatWhiteSpace()
+	if p.offset >= len(p.target) {
+		return nil
 	}
 
-	i, err := strconv.Atoi(frag[:count])
+	if p.target[p.offset] == ',' {
+		p.offset++
+		return nil
+	}
+
+	return errors.New("malformed tag, missing comma after rule")
+}
+
+// check if the substring at the current parser position has the given prefix
+func (p *Parser) hasPrefix(prefix []byte) bool {
+	check := p.target[p.offset:]
+	return bytes.HasPrefix(check, prefix)
+}
+
+// parseRule parses a single rule from the given tag and sets that field on the given Rule struct
+func (p *Parser) parseRule(rule *Rule) error {
+	switch {
+	case p.hasPrefix([]byte("required")):
+		rule.required = true
+		p.offset += len("required")
+	case p.hasPrefix([]byte("max=")):
+		p.offset += len("max=")
+		num, err := p.parseInt()
+		if err != nil {
+			return err
+		}
+
+		// need to trigger this after parsing to make sure we don't get stuck mid rule
+		if rule.max != nil {
+			return errors.New("max is defined more than once")
+		}
+		rule.max = &num
+	case p.hasPrefix([]byte("min=")):
+		p.offset += len("min=")
+		num, err := p.parseInt()
+		if err != nil {
+			return err
+		}
+
+		// need to trigger this after parsing to make sure we don't get stuck mid rule
+		if rule.min != nil {
+			return errors.New("min is defined more than once")
+		}
+		rule.min = &num
+	case p.hasPrefix([]byte("regex=")):
+		p.offset += len("regex=")
+		pat, err := p.parsePattern()
+		if err != nil {
+			return err
+		}
+
+		// need to trigger this after parsing to make sure we don't get stuck mid rule
+		if rule.pattern != nil {
+			return errors.New("regex is defined more than once")
+		}
+		rule.pattern = pat
+	default:
+		return fmt.Errorf("unknown rule '%s'", p.target[p.offset:])
+	}
+
+	return nil
+}
+
+// parseInt parses the int at the current parser location. If no int can be parsed an error is returned
+func (p *Parser) parseInt() (int, error) {
+	if p.offset >= len(p.target) {
+		return 0, errors.New("missing number for validation rule")
+	}
+
+	numStr := strings.Builder{}
+
+	// the first character can be a '-' since we support negative numbers
+	if p.target[p.offset] == '-' {
+		p.offset++
+		numStr.WriteRune('-')
+	}
+
+	for p.offset < len(p.target) {
+		r, i := utf8.DecodeRune(p.target[p.offset:])
+		if r < '0' || r > '9' {
+			// this is not a valid numeric rune so we should stop parsing
+			break
+		}
+
+		p.offset += i
+		numStr.WriteRune(r)
+	}
+
+	i, err := strconv.Atoi(numStr.String())
 	if err != nil {
-		// need to make sure we return count here so we don't get stuck in a parsing loop
-		return 0, count, err
+		return 0, err
 	}
 
-	return i, count, nil
+	return i, nil
 }
 
-// parsePattern parses a regex from a tag fragment and returns that regex and the number of characters
-// that were parsed to create it. Compiling the regexp can fail so the error is returned if it does.
-func parsePattern(frag string) (*regexp.Regexp, int, error) {
-	count := 0
-	escape := false
-	for _, r := range frag {
-		count++
-		if r == '\'' && escape {
-			escape = false
+// parsePattern parses a regex out of the tag. The regex must be enclosed by single quotes. Repeated
+// single quotes can be used to escape a single quote literal.
+func (p *Parser) parsePattern() (*regexp.Regexp, error) {
+	if p.offset >= len(p.target) {
+		return nil, errors.New("missing regex for validation rule")
+	}
+
+	if p.target[p.offset] != '\'' {
+		return nil, errors.New("regex must be enclosed by single quotes")
+	}
+	p.offset++
+
+	closed := false
+	pat := strings.Builder{}
+	for p.offset < len(p.target) {
+		if p.hasPrefix([]byte("''")) {
+			// this is an escaped single quote so we need to add the unescaped value to the pattern
+			p.offset += 2
+			pat.WriteRune('\'')
 			continue
 		}
-		if escape {
-			count--
-			break
-		}
+
+		r, i := utf8.DecodeRune(p.target[p.offset:])
+		p.offset += i
+
 		if r == '\'' {
-			escape = true
+			closed = true
+			break
 		}
+
+		pat.WriteRune(r)
 	}
 
-	// TODO: we should actually build the string using a string.Builder instead of doing this hacky fix
-	pattern := frag[0 : count-1]
-	pattern = strings.ReplaceAll(pattern, "''", "'")
-	regex, err := regexp.Compile(pattern)
+	if !closed {
+		return nil, errors.New("regex must be enclosed by single quotes")
+	}
+
+	regex, err := regexp.Compile(pat.String())
 	if err != nil {
-		return nil, count, err
+		return nil, err
 	}
 
-	return regex, count, nil
+	return regex, nil
 }

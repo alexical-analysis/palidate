@@ -21,32 +21,37 @@ func Struct(v any) error {
 	}
 
 	b := ErrorBuilder{}
+	p := Parser{}
 	for f, fieldValue := range value.Fields() {
-		tag, ok := f.Tag.Lookup("palidate")
+		rawTag, ok := f.Tag.Lookup("palidate")
 		if !ok {
 			// nothing to palidate here
 			continue
 		}
 
-		p := parseTag(tag)
-
-		if p.required && fieldValue.IsZero() {
-			b.add(f.Name, "required field had it's zero value")
+		tag, errs := p.Parse(rawTag)
+		if errs != nil {
+			b.addTagErrs(f.Name, errs...)
+			continue
 		}
 
-		errMsg, ok := validMin(fieldValue, p.min)
-		if !ok {
-			b.add(f.Name, errMsg)
+		if tag.required && fieldValue.IsZero() {
+			b.addFieldErrs(f.Name, errors.New("required field had it's zero value"))
 		}
 
-		errMsg, ok = validMax(fieldValue, p.max)
-		if !ok {
-			b.add(f.Name, errMsg)
+		err := validateMin(fieldValue, tag.min)
+		if err != nil {
+			b.addFieldErrs(f.Name, err)
 		}
 
-		errMsg, ok = validPattern(fieldValue, p.pattern)
-		if !ok {
-			b.add(f.Name, errMsg)
+		err = validateMax(fieldValue, tag.max)
+		if err != nil {
+			b.addFieldErrs(f.Name, err)
+		}
+
+		err = validatePattern(fieldValue, tag.pattern)
+		if err != nil {
+			b.addFieldErrs(f.Name, err)
 		}
 	}
 
@@ -57,53 +62,53 @@ func Struct(v any) error {
 	return nil
 }
 
-func validMin(v reflect.Value, min *int) (string, bool) {
+func validateMin(v reflect.Value, min *int) error {
 	if min == nil {
 		// nothing to validate
-		return "", true
+		return nil
 	}
 
 	if v.Kind() == reflect.String && v.Len() < *min {
-		return "string was too short", false
+		return errors.New("string was too short")
 	}
 
 	if v.CanInt() && int(v.Int()) < *min {
-		return "int was too small", false
+		return errors.New("int was too small")
 	}
 
-	return "", true
+	return nil
 }
 
-func validMax(v reflect.Value, max *int) (string, bool) {
+func validateMax(v reflect.Value, max *int) error {
 	if max == nil {
 		// nothing to validate
-		return "", true
+		return nil
 	}
 
 	if v.Kind() == reflect.String && v.Len() > *max {
-		return "string was too long", false
+		return errors.New("string was too long")
 	}
 
 	if v.CanInt() && int(v.Int()) > *max {
-		return "int was too large", false
+		return errors.New("int was too large")
 	}
 
-	return "", true
+	return nil
 }
 
-func validPattern(v reflect.Value, pat *regexp.Regexp) (string, bool) {
+func validatePattern(v reflect.Value, pat *regexp.Regexp) error {
 	if pat == nil {
 		// nothing to validate
-		return "", true
+		return nil
 	}
 
 	if v.Kind() != reflect.String {
-		return "patterns are only valid on string fields", false
+		return errors.New("patterns are only valid on string fields")
 	}
 
 	if !pat.MatchString(v.String()) {
-		return "failed to match string field against pattern", false
+		return errors.New("failed to match string field against pattern")
 	}
 
-	return "", true
+	return nil
 }

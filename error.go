@@ -1,42 +1,76 @@
 package palidate
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
-type FieldError struct {
-	FieldName string
-	Error     string
-}
-
+// ErrorBuilder can be used to build a palidate Error with zero or more tag and field errors
 type ErrorBuilder struct {
-	errors []FieldError
+	fieldErrors map[string][]error
+	tagErrors   map[string][]error
 }
 
-func (e *ErrorBuilder) add(fieldname, errMsg string) {
-	e.errors = append(e.errors, FieldError{FieldName: fieldname, Error: errMsg})
+// addFieldErrs adds zero or more field errors for the given fieldName.
+func (e *ErrorBuilder) addFieldErrs(fieldName string, err ...error) {
+	if e.fieldErrors == nil {
+		e.fieldErrors = make(map[string][]error)
+	}
+
+	e.fieldErrors[fieldName] = append(e.fieldErrors[fieldName], err...)
 }
 
+// addTagErrs adds zero or more tag errors for the given fieldName.
+func (e *ErrorBuilder) addTagErrs(fieldName string, err ...error) {
+	if e.tagErrors == nil {
+		e.tagErrors = make(map[string][]error)
+	}
+
+	e.tagErrors[fieldName] = append(e.tagErrors[fieldName], err...)
+}
+
+// hasErrors returns true if any field has at least one field or tag error
 func (e *ErrorBuilder) hasErrors() bool {
-	return len(e.errors) != 0
+	return len(e.fieldErrors) > 0 || len(e.tagErrors) > 0
 }
 
+// Error builds the actual error from the provided field and tag errors
 func (e *ErrorBuilder) Error() error {
-	return Error(e.errors)
+	tmpMap := make(map[string][]error)
+
+	for field, errs := range e.fieldErrors {
+		tmpMap[field] = append(tmpMap[field], errs...)
+	}
+
+	for field, errs := range e.tagErrors {
+		tmpMap[field] = append(tmpMap[field], errs...)
+	}
+
+	errMap := make(map[string]error, len(tmpMap))
+	for field, errs := range tmpMap {
+		errMap[field] = errors.Join(errs...)
+	}
+
+	return Error{errMap: errMap}
 }
 
-type Error []FieldError
+// Error contains all the errors for all the struct fields validated by palidate
+type Error struct {
+	errMap map[string]error
+}
 
+// Error implements the error interface for the Error type
 func (e Error) Error() string {
 	b := strings.Builder{}
-	b.WriteString("invalid struct fields| ")
+	if len(e.errMap) > 0 {
+		b.WriteString("invalid struct")
+	}
 
-	for i, f := range e {
-		b.WriteString(f.FieldName)
+	for field, err := range e.errMap {
+		b.WriteString("| ")
+		b.WriteString(field)
 		b.WriteString(": ")
-		b.WriteString(f.Error)
-
-		if i < len(e)-1 {
-			b.WriteString(", ")
-		}
+		b.WriteString(err.Error())
 	}
 
 	return b.String()
