@@ -140,10 +140,28 @@ func (p *Parser) parseRule(rule *Rule) error {
 		}
 		rule.pattern = pat
 	default:
-		return fmt.Errorf("unknown rule '%s'", p.target[p.offset:])
+		s := p.recover()
+		return fmt.Errorf("unknown rule '%s'", s)
 	}
 
 	return nil
+}
+
+// recover eats tokens until it finds a single comma which marks the end of rule. If it reaches the
+// end of the target, it stops looking. It returns the substring it found while searching
+func (p *Parser) recover() string {
+	s := strings.Builder{}
+	for p.offset < len(p.target) {
+		r, i := utf8.DecodeRune(p.target[p.offset:])
+		if r == ',' {
+			return s.String()
+		}
+
+		s.WriteRune(r)
+		p.offset += i
+	}
+
+	return s.String()
 }
 
 // parseInt parses the int at the current parser location. If no int can be parsed an error is returned
