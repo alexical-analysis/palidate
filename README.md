@@ -12,6 +12,54 @@ Currently, these rules are not working as the implementation has been removed.
 By adding the implementation back in you'll learn how to use Go's `reflect` package to inspect structs,
 read struct tags, and validate field values.
 
+## Quick Start
+
+Provided "palidate" struct tags on your struct fields to ensure fields contain valid values.
+
+```go
+type Example struct {
+	A int `palidate:"min=0,max=512"`
+	B string `palidate:"min=5,regex='^[a-zA-Z][a-zA-Z0-9]+$'"`
+	C float64 `palidate:"required"`
+}
+
+func main() {
+	test1 := Example{
+		A: 10,
+		B: "helloWorld1",
+		C: 3.14,
+	}
+	err :=palidate.Struct(test1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("test1 is a valid struct")
+
+	test2 := Example{
+		A: -1,
+		B: "hi!",
+	}
+	err = palidate.Struct(test2)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("test2 is a valid struct")
+}
+```
+
+This will result in the following output:
+
+```sh
+❯ go run .
+test1 is a valid struct
+panic: invalid struct| C: required field had it's zero value| A: int too small| B: string too short, failed to match string field against pattern
+
+goroutine 1 [running]:
+main.main()
+        /Users/alexis/Projects/talks/stdlib_reflect/palidate/main.go:33 +0xc4
+exit status 2
+```
+
 ## Workshop instructions
 
 Implement the missing functionality in **`palidate.go`**. The other files provide
