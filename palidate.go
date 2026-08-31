@@ -12,6 +12,7 @@ var (
 	intTooLargeErr          = errors.New("int too large")
 	patternForNonStringErr  = errors.New("patterns are only valid on string fields")
 	patternMismatchErr      = errors.New("failed to match string field against pattern")
+	nonStructErr            = errors.New("can not validate non-struct type")
 )
 
 // Struct validates the struct using the palidate tags to determine how fields should be populated.
